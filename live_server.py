@@ -787,8 +787,8 @@ class APIHandler(BaseHTTPRequestHandler):
 
         try:
             if path == "/api/configure":
-                """配置数据库路径和密钥"""
-                global DB_DIR, ALL_KEYS
+                """配置数据库路径"""
+                global DB_DIR, WECHAT_BASE_DIR
 
                 db_path = data.get('db_path')
                 hex_key = data.get('hex_key')
@@ -796,37 +796,29 @@ class APIHandler(BaseHTTPRequestHandler):
 
                 print(f"[HTTP] Configure: db_path={db_path}, hex_key_len={len(hex_key) if hex_key else 0}, wxid={wxid}")
 
-                if not db_path or not hex_key:
-                    self._send_error(f"Missing db_path or hex_key: db_path={db_path}, hex_key={'present' if hex_key else 'missing'}", 400)
+                if not db_path:
+                    self._send_error(f"Missing db_path", 400)
                     return
 
                 # 更新全局配置
-                DB_DIR = os.path.dirname(db_path)
-
-                # 解析密钥字符串 (格式: 64位enc_key)
-                # salt 会从数据库文件第一页自动提取
-                if len(hex_key) >= 64:
-                    enc_key = hex_key[:64]
-                    # 构建密钥字典格式，与 all_keys.json 兼容
-                    # salt 会在解密时从数据库文件读取
-                    ALL_KEYS = {
-                        "session/session.db": {
-                            "enc_key": enc_key
-                        },
-                        "message/message_0.db": {
-                            "enc_key": enc_key
-                        }
-                    }
-                    print(f"[HTTP] Configured: DB_DIR={DB_DIR}, keys loaded for session and message databases")
+                # db_path 是微信账户目录，如 .../xwechat_files
+                # DB_DIR 应该是 db_storage 子目录
+                if os.path.basename(db_path) == "xwechat_files" or os.path.exists(os.path.join(db_path, "db_storage")):
+                    DB_DIR = os.path.join(db_path, "db_storage")
+                    WECHAT_BASE_DIR = db_path
                 else:
-                    self._send_error(f"Invalid hex_key format, expected 64+ chars, got {len(hex_key)}", 400)
-                    return
+                    DB_DIR = os.path.dirname(db_path)
+                    WECHAT_BASE_DIR = os.path.dirname(DB_DIR)
 
-                print(f"[HTTP] Configured: DB_DIR={DB_DIR}, wxid={wxid}")
+                # 如果已经加载了密钥，保持使用；否则尝试从配置文件加载
+                if ALL_KEYS is None:
+                    _load_config()
+
+                print(f"[HTTP] Configured: DB_DIR={DB_DIR}, wxid={wxid}, keys_loaded={len(ALL_KEYS) if ALL_KEYS else 0}")
                 self._send_json({
                     "success": True,
                     "db_dir": DB_DIR,
-                    "keys_loaded": len(ALL_KEYS)
+                    "keys_loaded": len(ALL_KEYS) if ALL_KEYS else 0
                 })
 
             else:
