@@ -978,12 +978,15 @@ def main():
     parser.add_argument("--no-monitor", action="store_true", help="Disable live monitor")
     args = parser.parse_args()
 
+    # 确保配置已加载
+    _load_config()
+
     print("=" * 60)
     print("  WeChat Live Server - Phase 1")
     print("  Real-time decryption query service")
     print("=" * 60)
     print(f"Database: {DB_DIR}")
-    print(f"Keys: {len(ALL_KEYS)} loaded")
+    print(f"Keys: {len(ALL_KEYS) if ALL_KEYS else 0} loaded")
     print()
 
     # 启动实时监听
