@@ -766,6 +766,54 @@ class APIHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
+    def do_POST(self):
+        """处理 POST 请求"""
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        # 读取请求体
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length).decode('utf-8')
+
+        try:
+            data = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            self._send_error("Invalid JSON", 400)
+            return
+
+        try:
+            if path == "/api/configure":
+                """配置数据库路径和密钥"""
+                global DB_DIR, ALL_KEYS
+
+                db_path = data.get('db_path')
+                hex_key = data.get('hex_key')
+                wxid = data.get('wxid')
+
+                if not db_path or not hex_key:
+                    self._send_error("Missing db_path or hex_key", 400)
+                    return
+
+                # 更新全局配置
+                DB_DIR = os.path.dirname(db_path)
+                key_info = parse_key_string(hex_key)
+                if key_info:
+                    ALL_KEYS = [key_info]
+
+                print(f"[HTTP] Configured: DB_DIR={DB_DIR}, wxid={wxid}")
+                self._send_json({
+                    "success": True,
+                    "db_dir": DB_DIR,
+                    "keys_loaded": len(ALL_KEYS)
+                })
+
+            else:
+                self._send_error("Not found", 404)
+
+        except Exception as e:
+            print(f"[HTTP] POST Error: {e}")
+            self._send_error(str(e), 500)
+
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """多线程 HTTP 服务器"""
@@ -933,14 +981,21 @@ class LiveMonitor:
 
                 # 检查新消息
                 # 简化实现：广播更新事件
-                asyncio.run_coroutine_threadsafe(
-                    self.ws_manager.broadcast({
-                        "type": "update",
-                        "source": "session",
-                        "timestamp": int(time.time())
-                    }),
-                    asyncio.get_event_loop()
-                )
+                # 使用主线程的事件循环
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(
+                            self.ws_manager.broadcast({
+                                "type": "update",
+                                "source": "session",
+                                "timestamp": int(time.time())
+                            }),
+                            loop
+                        )
+                except RuntimeError:
+                    # 没有事件循环，跳过广播
+                    pass
 
                 self.last_session_mtime = current_mtime
         except OSError:
