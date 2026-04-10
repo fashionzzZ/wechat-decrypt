@@ -775,9 +775,13 @@ class APIHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length).decode('utf-8')
 
+        print(f"[HTTP] POST {path}, body length: {len(body)}")
+
         try:
             data = json.loads(body) if body else {}
-        except json.JSONDecodeError:
+            print(f"[HTTP] POST data keys: {list(data.keys())}")
+        except json.JSONDecodeError as e:
+            print(f"[HTTP] JSON decode error: {e}, body: {body[:200]}")
             self._send_error("Invalid JSON", 400)
             return
 
@@ -790,8 +794,10 @@ class APIHandler(BaseHTTPRequestHandler):
                 hex_key = data.get('hex_key')
                 wxid = data.get('wxid')
 
+                print(f"[HTTP] Configure: db_path={db_path}, hex_key_len={len(hex_key) if hex_key else 0}, wxid={wxid}")
+
                 if not db_path or not hex_key:
-                    self._send_error("Missing db_path or hex_key", 400)
+                    self._send_error(f"Missing db_path or hex_key: db_path={db_path}, hex_key={'present' if hex_key else 'missing'}", 400)
                     return
 
                 # 更新全局配置
