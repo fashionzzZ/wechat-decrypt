@@ -796,9 +796,26 @@ class APIHandler(BaseHTTPRequestHandler):
 
                 # 更新全局配置
                 DB_DIR = os.path.dirname(db_path)
-                key_info = parse_key_string(hex_key)
-                if key_info:
-                    ALL_KEYS = [key_info]
+
+                # 解析密钥字符串 (格式: 64位enc_key + 32位salt)
+                if len(hex_key) >= 96:
+                    enc_key = hex_key[:64]
+                    salt = hex_key[64:96]
+                    # 构建密钥字典格式，与 all_keys.json 兼容
+                    ALL_KEYS = {
+                        "session/session.db": {
+                            "enc_key": enc_key,
+                            "salt": salt
+                        },
+                        "message/message_0.db": {
+                            "enc_key": enc_key,
+                            "salt": salt
+                        }
+                    }
+                    print(f"[HTTP] Configured: DB_DIR={DB_DIR}, keys loaded for session and message databases")
+                else:
+                    self._send_error("Invalid hex_key format, expected 96+ chars", 400)
+                    return
 
                 print(f"[HTTP] Configured: DB_DIR={DB_DIR}, wxid={wxid}")
                 self._send_json({
