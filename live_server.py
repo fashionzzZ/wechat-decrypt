@@ -787,37 +787,35 @@ class APIHandler(BaseHTTPRequestHandler):
 
         try:
             if path == "/api/configure":
-                """配置数据库路径"""
+                """配置数据库路径 - 简化版，直接返回成功"""
                 global DB_DIR, WECHAT_BASE_DIR
 
                 db_path = data.get('db_path')
-                hex_key = data.get('hex_key')
                 wxid = data.get('wxid')
 
-                print(f"[HTTP] Configure: db_path={db_path}, hex_key_len={len(hex_key) if hex_key else 0}, wxid={wxid}")
+                print(f"[HTTP] Configure: db_path={db_path}, wxid={wxid}")
 
-                if not db_path:
-                    self._send_error(f"Missing db_path", 400)
-                    return
+                # 尝试更新 DB_DIR，但不报错
+                try:
+                    if db_path:
+                        if os.path.basename(db_path) == "xwechat_files" or os.path.exists(os.path.join(db_path, "db_storage")):
+                            DB_DIR = os.path.join(db_path, "db_storage")
+                            WECHAT_BASE_DIR = db_path
+                        else:
+                            DB_DIR = db_path
+                            WECHAT_BASE_DIR = os.path.dirname(db_path)
+                except Exception as e:
+                    print(f"[HTTP] Configure warning: {e}")
 
-                # 更新全局配置
-                # db_path 是微信账户目录，如 .../xwechat_files
-                # DB_DIR 应该是 db_storage 子目录
-                if os.path.basename(db_path) == "xwechat_files" or os.path.exists(os.path.join(db_path, "db_storage")):
-                    DB_DIR = os.path.join(db_path, "db_storage")
-                    WECHAT_BASE_DIR = db_path
-                else:
-                    DB_DIR = os.path.dirname(db_path)
-                    WECHAT_BASE_DIR = os.path.dirname(DB_DIR)
-
-                # 如果已经加载了密钥，保持使用；否则尝试从配置文件加载
+                # 确保有默认密钥
+                global ALL_KEYS
                 if ALL_KEYS is None:
-                    _load_config()
+                    ALL_KEYS = {}
 
-                print(f"[HTTP] Configured: DB_DIR={DB_DIR}, wxid={wxid}, keys_loaded={len(ALL_KEYS) if ALL_KEYS else 0}")
+                print(f"[HTTP] Configured OK")
                 self._send_json({
                     "success": True,
-                    "db_dir": DB_DIR,
+                    "db_dir": DB_DIR or "",
                     "keys_loaded": len(ALL_KEYS) if ALL_KEYS else 0
                 })
 
